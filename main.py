@@ -1,11 +1,18 @@
 import subprocess
 from time import sleep
 import xml.etree.ElementTree as ET
+import signal
 
 def get_ui_xml_tree():
     prcs = subprocess.run(["adb", "exec-out", "uiautomator", "dump", "/dev/tty"], capture_output=True)
     ui_xml = prcs.stdout.rstrip(b"UI hierchary dumped to: /dev/tty\n")
+    if signal_received:
+        return None
+
     return ET.fromstring(ui_xml)
+
+def open_pixel_screenshots():
+    subprocess.run(["adb", "shell", "am", "start", "-n", "com.google.android.apps.pixel.agent/.app.ui.browser.BrowserActivity", "--activity-clear-task"], capture_output=True)
 
 def open_first_screenshot():
     # find first screenshot on ui xml
@@ -42,17 +49,28 @@ def get_screenshot_title(ui):
         return ""
     return node.attrib['text']
 
+signal_received = False
+def signal_handler(sig, frame):
+    global signal_received
+    print("received interrupt signal...")
+    signal_received = True
+
 animations_delay = 0.5
 
 
 if __name__ == '__main__':
+    open_pixel_screenshots()
     open_first_screenshot()
+    signal.signal(signal.SIGINT, signal_handler)
 
     processed_screenshots = 0
     screenshot_title_repeats = 0
     previous_screenshot_title = ""
-    while screenshot_title_repeats < 10:
+    while screenshot_title_repeats < 10 and not signal_received:
         ui = get_ui_xml_tree()
+        if signal_received:
+            break
+
         
         current_screenshot_title = get_screenshot_title(ui)
         if previous_screenshot_title != current_screenshot_title:
